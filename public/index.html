@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>smog Chatbot</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="logo-animation">
+      <div class="smoke-circle"></div>
+      <h1>smog</h1>
+      <p>Your AI Chatbot Companion</p>
+    </div>
+
+    <div class="buttons">
+      <button onclick="location.href='login.html'">Login</button>
+      <button onclick="location.href='register.html'">Register</button>
+      <button onclick="continueAsGuest()">Continue as Guest</button>
+    </div>
+  </div>
+  
+
+  <script>
+    // Continue as Guest (No login, using developer data)
+    function continueAsGuest() {
+      // You can define what the guest does here. Example:
+      window.location.href = '/chat.html?guest=true'; 
+    }
+  </script>
+</body>
+</html>
