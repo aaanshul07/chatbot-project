@@ -49,11 +49,12 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: env === 'production', // ✅ Secure only in production
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
+
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
