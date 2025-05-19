@@ -1,47 +1,69 @@
 const express = require('express');
-const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 const Fuse = require('fuse.js');
 const session = require('express-session');
-const util = require('util');
+const dotenv = require('dotenv');
+
+// Load appropriate .env file
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 const app = express();
 
-// MySQL connection
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '1234',
-  database: 'chatbot_db'
-});
+// ===== DB SETUP =====
+let dbType, db;
 
-// Promisify db.query for async/await
-const query = util.promisify(db.query).bind(db);
+if (env === 'production') {
+  const { createClient } = require('@libsql/client');
+  dbType = 'libsql';
+  db = createClient({
+    url: process.env.DB_URL,
+    authToken: process.env.DB_AUTH_TOKEN || undefined,
+  });
+  console.log("✅ Using Turso (libSQL) for production");
+} else {
+  const mysql = require('mysql2/promise');
+  dbType = 'mysql';
+  db = mysql.createPool({
+    host: process.env.MYSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database: process.env.MYSQL_DATABASE
+  });
+  console.log("✅ Using MySQL for local development");
+}
 
-// Connect to MySQL
-db.connect((err) => {
-  if (err) {
-    console.error('Error connecting to MySQL:', err.stack);
-    return;
+// ===== Unified Query Runner =====
+async function runQuery(sql, args = []) {
+  if (dbType === 'libsql') {
+    return await db.execute({ sql, args });
+  } else {
+    const [rows] = await db.execute(sql, args);
+    return { rows };
   }
-  console.log('Connected to MySQL');
-});
+}
 
-// Session setup
+// ===== Middleware =====
 app.use(session({
-  secret: 'your_secret_key',
+  secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: false,
+  cookie: {
+    secure: false,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000
+  }
 }));
-
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// Register route
+// ===== Routes =====
+
+// Register
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   try {
-    await query('INSERT INTO users (username, password) VALUES (?, ?)', [username, password]);
+    await runQuery('INSERT INTO users (username, password) VALUES (?, ?)', [username, password]);
     res.json({ message: 'Registration successful' });
   } catch (err) {
     console.error('Register Error:', err);
@@ -49,31 +71,19 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Login route
+// Login
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).send('Please provide both username and password');
-  }
+  if (!username || !password) return res.status(400).send('Missing credentials');
 
   try {
-    const results = await query('SELECT * FROM users WHERE username = ?', [username]);
-
-    if (results.length === 0) {
-      return res.status(401).send('User not found');
-    }
-
-    const user = results[0];
-
-    if (user.password !== password) {
-      return res.status(401).send('Invalid password');
-    }
+    const result = await runQuery('SELECT * FROM users WHERE username = ?', [username]);
+    const user = result.rows[0];
+    if (!user) return res.status(401).send('User not found');
+    if (user.password !== password) return res.status(401).send('Invalid password');
 
     req.session.userId = user.id;
     req.session.username = user.username;
-
-    console.log('User logged in:', req.session);
     res.status(200).send('Login successful');
   } catch (err) {
     console.error('Login error:', err);
@@ -81,28 +91,25 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Check login status route
+// Check login
 app.get('/checkLogin', (req, res) => {
-  if (req.session.userId) {
-    res.status(200).send('User is logged in');
-  } else {
-    res.status(401).send('User is not logged in');
-  }
+  if (req.session.userId) res.status(200).send('User is logged in');
+  else res.status(401).send('User is not logged in');
 });
 
-//// Add Q&A for either guest or logged-in user
+// Add Q&A
 app.post('/add-qa', async (req, res) => {
   const { question, answer } = req.body;
   const userId = req.session.userId;
 
   try {
     if (userId) {
-      // If user is logged in, save to their personal user_data
-      await query('INSERT INTO user_data (user_id, question, answer) VALUES (?, ?, ?)', [userId, question, answer]);
+      await runQuery('DELETE FROM user_data WHERE user_id = ? AND question = ?', [userId, question]);
+      await runQuery('INSERT INTO user_data (user_id, question, answer) VALUES (?, ?, ?)', [userId, question, answer]);
       res.json({ message: "Saved to your personal data." });
     } else {
-      // If guest, save to guest_data table (shared globally)
-      await query('INSERT INTO guest_data (question, answer) VALUES (?, ?)', [question, answer]);
+      await runQuery('DELETE FROM guest_data WHERE question = ?', [question]);
+      await runQuery('INSERT INTO guest_data (question, answer) VALUES (?, ?)', [question, answer]);
       res.json({ message: "Saved to guest data (shared globally)." });
     }
   } catch (err) {
@@ -111,37 +118,29 @@ app.post('/add-qa', async (req, res) => {
   }
 });
 
-
-
-// Chatbot response route
+// Chat
 app.post('/chat', async (req, res) => {
   const message = req.body.message?.trim().toLowerCase();
   const userId = req.session.userId;
-
   if (!message) return res.status(400).send('No message provided');
 
   try {
-    let userData = [];
-    let guestData = await query('SELECT question, answer FROM guest_data');
-    let defaultData = await query('SELECT question, answer FROM default_data');
+    const defaultData = await runQuery('SELECT question, answer FROM default_data');
+    const guestData = await runQuery('SELECT question, answer FROM guest_data');
+    let dataToSearch = [...defaultData.rows, ...guestData.rows];
 
     if (userId) {
-      // If the user is logged in, fetch their personal data
-      userData = await query('SELECT question, answer FROM user_data WHERE user_id = ?', [userId]);
+      const userData = await runQuery('SELECT question, answer FROM user_data WHERE user_id = ?', [userId]);
+      dataToSearch = [...dataToSearch, ...userData.rows];
     }
 
-    // Combine guest data, user data (if logged in), and default data
-    const allData = guestData.concat(userData, defaultData);
-
-    // Fuse.js for fuzzy searching
-    const fuse = new Fuse(allData, {
+    const fuse = new Fuse(dataToSearch, {
       keys: ['question'],
       includeScore: true,
       threshold: 0.3
     });
 
     const result = fuse.search(message);
-
     if (result.length > 0) {
       res.json({ reply: result[0].item.answer });
     } else {
@@ -153,8 +152,8 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-
-// Start server
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
+// ===== Start Server =====
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });

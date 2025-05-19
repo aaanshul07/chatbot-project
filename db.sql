@@ -1,5 +1,3 @@
-CREATE DATABASE IF NOT EXISTS chatbot_db;
-USE chatbot_db;
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -25,6 +23,12 @@ CREATE TABLE IF NOT EXISTS user_data (
 );
 
 CREATE TABLE IF NOT EXISTS default_data (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  question TEXT,
+  answer TEXT
+);
+
+CREATE TABLE IF NOT EXISTS guest_data (
   id INT AUTO_INCREMENT PRIMARY KEY,
   question TEXT,
   answer TEXT
