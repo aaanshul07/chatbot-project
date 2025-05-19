@@ -44,6 +44,8 @@ async function runQuery(sql, args = []) {
 }
 
 // ===== Middleware =====
+app.set('trust proxy', 1); // 🔑 important for HTTPS on Render
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
@@ -51,6 +53,7 @@ app.use(session({
   cookie: {
     secure: env === 'production', // ✅ Secure only in production
     httpOnly: true,
+    sameSite: env === 'production' ? 'none' : 'lax',
     maxAge: 24 * 60 * 60 * 1000
   }
 }));

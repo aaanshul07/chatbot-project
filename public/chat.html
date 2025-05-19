@@ -79,6 +79,7 @@ document.getElementById('add-form').onsubmit = async (e) => {
 
   const res = await fetch('/add-qa', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, answer })
   });

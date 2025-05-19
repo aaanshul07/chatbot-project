@@ -39,12 +39,14 @@
         div.innerHTML = `<b>Q:</b> ${item.question} <br><b>A:</b> ${item.answer} 
           <button onclick="deleteQA(${item.id})">Delete</button><hr>`;
         list.appendChild(div);
+        credentials: 'include'
       });
     }
 
     async function deleteQA(id) {
       await fetch('/delete-qa', {
         method: 'POST',
+        credentials: 'include'
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
       });

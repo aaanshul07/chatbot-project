@@ -6,6 +6,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
 
   const res = await fetch('/login', {
     method: 'POST',
+    credentials: 'include', // ✅ Needed for session cookies to work on Render
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
   });
@@ -25,6 +26,7 @@ document.getElementById('registerForm').addEventListener('submit', async functio
 
   const res = await fetch('/register', {
     method: 'POST',
+    credentials: 'include', // ✅ Needed for session cookies to work on Render
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
   });
