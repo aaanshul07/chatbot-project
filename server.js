@@ -4,12 +4,11 @@ const Fuse = require('fuse.js');
 const session = require('express-session');
 const dotenv = require('dotenv');
 
-// Load environment
-require('dotenv').config();
+dotenv.config();
 
 const app = express();
 
-// ===== TURSO DB ONLY =====
+// ===== TURSO DB =====
 const { createClient } = require('@libsql/client');
 
 const db = createClient({
@@ -17,9 +16,9 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// ===== Unified Query =====
+// ===== QUERY FUNCTION =====
 async function runQuery(sql, args = []) {
-  return await db.execute(sql, args);
+  return await db.execute({ sql, args });
 }
 
 // ===== Middleware =====
@@ -40,9 +39,9 @@ app.use(session({
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// =======================
-// REGISTER
-// =======================
+// ===== ROUTES =====
+
+// Register
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
 
@@ -55,19 +54,14 @@ app.post('/register', async (req, res) => {
     res.json({ message: 'Registration successful' });
 
   } catch (err) {
-    console.error('Register Error:', err);
+    console.error(err);
     res.status(500).json({ message: 'Registration failed' });
   }
 });
 
-// =======================
-// LOGIN
-// =======================
+// Login
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
-  if (!username || !password)
-    return res.status(400).send('Missing credentials');
 
   try {
     const result = await runQuery(
@@ -83,99 +77,37 @@ app.post('/login', async (req, res) => {
     req.session.userId = user.id;
     req.session.username = user.username;
 
-    res.status(200).send('Login successful');
+    res.send('Login successful');
 
   } catch (err) {
-    console.error('Login error:', err);
+    console.error(err);
     res.status(500).send('Server error');
   }
 });
 
-// =======================
-// CHECK LOGIN
-// =======================
-app.get('/checkLogin', (req, res) => {
-  if (req.session.userId) {
-    res.status(200).send('User is logged in');
-  } else {
-    res.status(401).send('User is not logged in');
-  }
-});
-
-// =======================
-// ADD Q&A
-// =======================
-app.post('/add-qa', async (req, res) => {
-  const { question, answer } = req.body;
-  const userId = req.session.userId;
-
-  try {
-    if (userId) {
-      await runQuery(
-        'DELETE FROM user_data WHERE user_id = ? AND question = ?',
-        [userId, question]
-      );
-
-      await runQuery(
-        'INSERT INTO user_data (user_id, question, answer) VALUES (?, ?, ?)',
-        [userId, question, answer]
-      );
-
-      res.json({ message: "Saved to your personal data." });
-
-    } else {
-      await runQuery(
-        'DELETE FROM guest_data WHERE question = ?',
-        [question]
-      );
-
-      await runQuery(
-        'INSERT INTO guest_data (question, answer) VALUES (?, ?)',
-        [question, answer]
-      );
-
-      res.json({ message: "Saved to guest data (shared)." });
-    }
-
-  } catch (err) {
-    console.error('Add QA Error:', err);
-    res.status(500).json({ message: "Database error" });
-  }
-});
-
-// =======================
-// CHAT
-// =======================
+// Chat
 app.post('/chat', async (req, res) => {
   const message = req.body.message?.trim().toLowerCase();
   const userId = req.session.userId;
 
-  if (!message)
-    return res.status(400).send('No message provided');
+  if (!message) return res.status(400).send('No message');
 
   try {
-    const defaultData = await runQuery(
-      'SELECT question, answer FROM default_data'
-    );
+    const defaultData = await runQuery('SELECT question, answer FROM default_data');
+    const guestData = await runQuery('SELECT question, answer FROM guest_data');
 
-    const guestData = await runQuery(
-      'SELECT question, answer FROM guest_data'
-    );
-
-    let dataToSearch = [...defaultData.rows, ...guestData.rows];
+    let data = [...defaultData.rows, ...guestData.rows];
 
     if (userId) {
       const userData = await runQuery(
         'SELECT question, answer FROM user_data WHERE user_id = ?',
         [userId]
       );
-
-      dataToSearch = [...dataToSearch, ...userData.rows];
+      data = [...data, ...userData.rows];
     }
 
-    const fuse = new Fuse(dataToSearch, {
+    const fuse = new Fuse(data, {
       keys: ['question'],
-      includeScore: true,
       threshold: 0.3
     });
 
@@ -188,16 +120,14 @@ app.post('/chat', async (req, res) => {
     }
 
   } catch (err) {
-    console.error('Chat error:', err);
-    res.status(500).send('Internal Server Error');
+    console.error(err);
+    res.status(500).send('Error');
   }
 });
 
-// =======================
-// START SERVER
-// =======================
+// ===== START SERVER =====
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
