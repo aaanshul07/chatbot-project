@@ -16,12 +16,12 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-// ===== QUERY FUNCTION =====
+// ===== QUERY WRAPPER =====
 async function runQuery(sql, args = []) {
   return await db.execute({ sql, args });
 }
 
-// ===== Middleware =====
+// ===== MIDDLEWARE =====
 app.set('trust proxy', 1);
 
 app.use(session({
@@ -39,9 +39,10 @@ app.use(session({
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// ===== ROUTES =====
 
-// Register
+// =======================
+// REGISTER
+// =======================
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
 
@@ -52,14 +53,16 @@ app.post('/register', async (req, res) => {
     );
 
     res.json({ message: 'Registration successful' });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Registration failed' });
   }
 });
 
-// Login
+
+// =======================
+// LOGIN
+// =======================
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -78,14 +81,108 @@ app.post('/login', async (req, res) => {
     req.session.username = user.username;
 
     res.send('Login successful');
-
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
   }
 });
 
-// Chat
+
+// =======================
+// CHECK LOGIN
+// =======================
+app.get('/checkLogin', (req, res) => {
+  if (req.session.userId) {
+    res.send('User logged in');
+  } else {
+    res.status(401).send('Not logged in');
+  }
+});
+
+
+// =======================
+// ADD Q&A (CHAT + DASHBOARD)
+// =======================
+app.post('/add-qa', async (req, res) => {
+  const { question, answer } = req.body;
+  const userId = req.session.userId;
+
+  try {
+    if (userId) {
+      await runQuery(
+        'DELETE FROM user_data WHERE user_id = ? AND question = ?',
+        [userId, question]
+      );
+
+      await runQuery(
+        'INSERT INTO user_data (user_id, question, answer) VALUES (?, ?, ?)',
+        [userId, question, answer]
+      );
+
+      res.json({ message: "Saved to your personal data" });
+    } else {
+      await runQuery(
+        'DELETE FROM guest_data WHERE question = ?',
+        [question]
+      );
+
+      await runQuery(
+        'INSERT INTO guest_data (question, answer) VALUES (?, ?)',
+        [question, answer]
+      );
+
+      res.json({ message: "Saved to guest data" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error saving data" });
+  }
+});
+
+
+// =======================
+// GET USER DATA (DASHBOARD)
+// =======================
+app.get('/user-data', async (req, res) => {
+  const userId = req.query.userId;
+
+  try {
+    const result = await runQuery(
+      'SELECT * FROM user_data WHERE user_id = ?',
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error loading data');
+  }
+});
+
+
+// =======================
+// DELETE Q&A
+// =======================
+app.post('/delete-qa', async (req, res) => {
+  const { id } = req.body;
+
+  try {
+    await runQuery(
+      'DELETE FROM user_data WHERE id = ?',
+      [id]
+    );
+
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Delete error');
+  }
+});
+
+
+// =======================
+// CHAT
+// =======================
 app.post('/chat', async (req, res) => {
   const message = req.body.message?.trim().toLowerCase();
   const userId = req.session.userId;
@@ -125,7 +222,10 @@ app.post('/chat', async (req, res) => {
   }
 });
 
-// ===== START SERVER =====
+
+// =======================
+// START SERVER
+// =======================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
