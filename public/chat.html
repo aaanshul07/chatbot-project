@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>smog Chat</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="header">
+      <h2>smog - AI Chatbot</h2>
+    </div>
+    <div id="chat-box"></div>
+    <form id="chat-form">
+      <input type="text" id="user-input" placeholder="Ask me anything..." required />
+      <button type="submit">Send</button>
+    </form>
+  </div>
+
+  <script>
+    const userMode = localStorage.getItem('userMode');
+
+    // ✅ Check if user came properly
+    if (!userMode) {
+      alert("Please login or continue as guest.");
+      window.location.href = "index.html";
+    }
+
+    const chatBox = document.getElementById('chat-box');
+
+    function addMessage(from, text) {
+      const div = document.createElement('div');
+      div.textContent = `${from}: ${text}`;
+      div.className = from === 'You' ? 'user-msg' : 'bot-msg';
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    document.getElementById('chat-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const input = document.getElementById('user-input');
+      const message = input.value.trim();
+      if (!message) return;
+
+      addMessage('You', message);
+
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+
+      const data = await res.json();
+      addMessage('smog', data.reply);
+      input.value = '';
+    });
+  </script>
+
+  <!-- ADD BUTTON -->
+  <button id="add-btn" style="position:absolute; top:10px; right:10px;">Add</button>
+
+  <!-- ADD MODAL -->
+  <div id="add-modal" style="display:none; position:fixed; top:20%; left:35%; background:white; padding:20px; border:1px solid black;">
+    <h3>Add Q&A</h3>
+    <form id="add-form">
+      <input type="text" id="new-question" placeholder="Enter question" required /><br><br>
+      <input type="text" id="new-answer" placeholder="Enter answer" required /><br><br>
+      <button type="submit">Save</button>
+      <button type="button" onclick="document.getElementById('add-modal').style.display='none';">Cancel</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('add-btn').onclick = () => {
+      document.getElementById('add-modal').style.display = 'block';
+    };
+
+    document.getElementById('add-form').onsubmit = async (e) => {
+      e.preventDefault();
+
+      const question = document.getElementById('new-question').value;
+      const answer = document.getElementById('new-answer').value;
+
+      const res = await fetch('/add-qa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, answer })
+      });
+
+      const result = await res.json();
+      alert(result.message);
+
+      document.getElementById('add-form').reset();
+      document.getElementById('add-modal').style.display = 'none';
+    };
+  </script>
+</body>
+</html>
+

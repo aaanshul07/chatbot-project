@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>smog Dashboard</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="chat-container">
+    <h2>Your Personal Q&A - smog</h2>
+
+    <div id="qa-list"></div>
+
+    <h3>Add New Q&A</h3>
+    <form id="add-qa-form">
+      <input type="text" id="question" placeholder="Your question" required />
+      <input type="text" id="answer" placeholder="Answer to your question" required />
+      <button type="submit">Add</button>
+    </form>
+  </div>
+
+  <script>
+    const userId = localStorage.getItem('userId');
+    const userMode = localStorage.getItem('userMode');
+
+    if (!userId || userMode !== 'user') {
+      alert("Login required.");
+      window.location.href = "index.html";
+    }
+
+    async function loadQA() {
+      const res = await fetch('/user-data?userId=' + userId);
+      const data = await res.json();
+      const list = document.getElementById('qa-list');
+      list.innerHTML = '';
+      data.forEach(item => {
+        const div = document.createElement('div');
+        div.innerHTML = `<b>Q:</b> ${item.question} <br><b>A:</b> ${item.answer} 
+          <button onclick="deleteQA(${item.id})">Delete</button><hr>`;
+        list.appendChild(div);
+        credentials: 'include'
+      });
+    }
+
+    async function deleteQA(id) {
+      await fetch('/delete-qa', {
+        method: 'POST',
+        credentials: 'include'
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      loadQA();
+    }
+
+    document.getElementById('add-qa-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const question = document.getElementById('question').value;
+      const answer = document.getElementById('answer').value;
+      await fetch('/add-qa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, answer, userId })
+      });
+      document.getElementById('question').value = '';
+      document.getElementById('answer').value = '';
+      loadQA();
+    });
+
+    loadQA();
+  </script>
+</body>
+</html>
