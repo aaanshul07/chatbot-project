@@ -1,46 +1,43 @@
-#  AI Chatbot Project (smog AI)
+# AI Chatbot Project (smog AI)
 
-##  Features
+## Features
 
-* User Login & Registration
-* Guest Mode
-* Chatbot with predefined responses
-* User custom data panel
+- User Login & Registration
+- Guest Mode
+- Chatbot with predefined responses
+- User custom data panel
 
 ---
 
-##  How to Run This Project
+## How to Run This Project
 
-1. Download or clone this project
+1. Clone this repository
 
 2. Open terminal in project folder
 
 3. Install dependencies:
    npm install
 
-4. Create a file named `.env` and add:
+4. Create a `.env` file and add:
 
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=yourpassword
-DB_NAME=chatbot
+   TURSO_DATABASE_URL=your_turso_database_url
+   TURSO_AUTH_TOKEN=your_turso_auth_token
+   SESSION_SECRET=your_secret_key
 
-5. Setup database:
-
-* Open MySQL
-* Run the file `db.sql`
+5. Run database migration:
+   node migrate.js
 
 6. Start server:
-   npm start
+   node server.js
 
 7. Open browser:
    http://localhost:3000
 
 ---
 
-##  Tech Used
+## Tech Used
 
-* Node.js
-* Express.js
-* MySQL / SQLite
-* HTML, CSS, JavaScript
+- Node.js
+- Express.js
+- Turso (libSQL)
+- HTML, CSS, JavaScript
